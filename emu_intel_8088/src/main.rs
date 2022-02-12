@@ -25,23 +25,19 @@ pub fn add8(op1: u8, op2: u8) -> (u8, Flags) {
 
     let mut flags = Flags::EMPTY;
 
-    // set carry flag if the MSB of the result is 0 and at least one MSB of the operands is 1
-    let msb_result = result & (1 << 7);
-    let msb_op1 = op1 & (1 << 7);
-    let msb_op2 = op2 & (1 << 7);
-
-    if msb_result == 0 {
-        if msb_result ^ msb_op1 == (1 << 7) || msb_result ^ msb_op2 == (1 << 7) {
-            flags = flags | Flags::CARRY_FLAG;
-        }
+    // set carry flag is the result is smaller than operands
+    if result < op1 {
+        flags = flags | Flags::CARRY_FLAG;
     }
 
     // count the number of bits set in the result
     // if the number is even set the parity flag
     let mut bits_set = 0;
 
-    for pos in 0..7 {
-        bits_set += result & (1 << pos);
+    for pos in 0..8 {
+        if result & (1 << pos) != 0 {
+            bits_set += 1;
+        }
     }
     if bits_set & 1 == 0 {
         flags = flags | Flags::PARITY_FLAG;
@@ -64,10 +60,15 @@ pub fn add8(op1: u8, op2: u8) -> (u8, Flags) {
         flags = flags | Flags::ZERO_FLAG;
     }
 
+    let msb_result = result & (1 << 7);
+
     // Set sign flag to MSB of result
-    if msb_result == 1 {
+    if msb_result == (1 << 7){
         flags = flags | Flags::SIGN_FLAG;
     }
+
+    let msb_op1 = op1 & (1 << 7);
+    let msb_op2 = op2 & (1 << 7);
 
     // if two operators with MSB 1 have result with MSB 0 we have overflow
     // if two operators with MSB 0 have result with MSB 1 we have overflow
@@ -87,5 +88,8 @@ mod tests {
         assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), add8(0, 0));
         assert_eq!((1, Flags::EMPTY), add8(1, 0));
         assert_eq!((0, Flags::CARRY_FLAG | Flags::ZERO_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG), add8(0xFF, 1));
+        assert_eq!((0xF1, Flags::SIGN_FLAG), add8(0xF0, 1));
+        assert_eq!((0xE0, Flags::SIGN_FLAG | Flags::CARRY_FLAG), add8(0xF0, 0xF0));
+        assert_eq!((0x80, Flags::SIGN_FLAG | Flags::OVERFLOW_FLAG | Flags::AUXILIARY_CARRY_FLAG), add8(0x7F, 1));
     }
 }
