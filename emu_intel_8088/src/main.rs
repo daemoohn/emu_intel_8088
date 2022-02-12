@@ -19,6 +19,35 @@ bitflags! {
     }
 }
 
+pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
+    // note: op1 is ax
+    // based on https://stackoverflow.com/questions/18945247/how-does-aaa-work-in-8086-instruction-set
+    // based on https://www.felixcloutier.com/x86/daa
+    // if ( (AL and 0Fh) > 9 or (AuxC = 1)) then
+    //     al := al + 6
+    //     AuxC := 1               ;Set Auxilliary carry.
+    // endif
+    // if ( (al > 9Fh) or (Carry = 1)) then
+    //     al := al + 60h
+    //     Carry := 1;             ;Set carry flag.
+    // endif
+    let mut temp_flags = Flags::empty();
+    let mut result = op1;
+    if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+        result += 6;
+        temp_flags |= Flags::AUXILIARY_CARRY_FLAG;
+    }
+    if result > 0x9F || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
+        result += 0x60;
+        temp_flags |= Flags::CARRY_FLAG;
+    }
+    let mut r_flags = compute_flags8(op1, op1, result);
+    r_flags = r_flags - Flags::AUXILIARY_CARRY_FLAG | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
+    r_flags = r_flags - Flags::CARRY_FLAG | (temp_flags & Flags::CARRY_FLAG);
+
+    return (result, r_flags);
+}
+
 pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     // based on https://asm.inightmare.org/opcodelst/index.php?op=AAA
     // https://stackoverflow.com/questions/51710279/assembly-instructions-aaa
@@ -189,6 +218,20 @@ fn compute_flags8(op1: u8, op2: u8, result: u8) -> Flags {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_daa() {
+        assert_eq!(
+            (
+                0x14,
+                Flags::AUXILIARY_CARRY_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::CARRY_FLAG
+                    | Flags::OVERFLOW_FLAG
+            ),
+            daa(0xAE, Flags::SIGN_FLAG)
+        )
+    }
 
     #[test]
     fn test_aaa() {
