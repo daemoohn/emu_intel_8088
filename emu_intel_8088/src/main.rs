@@ -19,6 +19,35 @@ bitflags! {
     }
 }
 
+pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
+    // based on https://asm.inightmare.org/opcodelst/index.php?op=AAA
+    // https://stackoverflow.com/questions/51710279/assembly-instructions-aaa
+    // note: op1 is ax
+    // IF ((( AL and 0FH ) > 9 ) or (AF==1)
+    //     IF CPU<286 THEN
+    //         AL = AL+6
+    //     ELSE
+    //         AX = AX+6
+    //     ENDIF
+    //     AH = AH+1
+    //     CF = 1
+    //     AF = 1
+    // ELSE
+    //     CF = 0
+    //     AF = 0
+    // ENDIF
+    // AL = AL and 0Fh
+    let mut r_flags = Flags::empty();
+    let mut result = op1;
+    if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+        result += 262;
+        r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+    }
+    result &= 0xFF0F;
+
+    return (result, r_flags);
+}
+
 pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = add16(op1, 1, Flags::empty());
     // we remove carry flag from result flags and add it only if the initial flags contained it
@@ -160,6 +189,14 @@ fn compute_flags8(op1: u8, op2: u8, result: u8) -> Flags {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_aaa() {
+        assert_eq!(
+            (257, Flags::CARRY_FLAG | Flags::AUXILIARY_CARRY_FLAG),
+            aaa(11, Flags::empty())
+        )
+    }
 
     #[test]
     fn test_inc16() {
