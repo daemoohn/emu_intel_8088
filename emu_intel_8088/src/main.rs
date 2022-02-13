@@ -77,6 +77,12 @@ pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     return (result, r_flags);
 }
 
+pub fn sub16(op1: u16, op2: u16, _flags: Flags) -> (u16, Flags) {
+    let result = op1 - op2;
+    let r_flags = compute_flags16(op1, op2, false, result);
+    return (result, r_flags);
+}
+
 pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = add16(op1, 1, Flags::empty());
     // we remove carry flag from result flags and add it only if the initial flags contained it
@@ -86,22 +92,30 @@ pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
 
 pub fn adc16(op1: u16, op2: u16, carry: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags16(op1, op2, result);
+    let r_flags = compute_flags16(op1, op2, true, result);
     return (result, r_flags);
 }
 
 pub fn add16(op1: u16, op2: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 + op2;
-    let r_flags = compute_flags16(op1, op2, result);
+    let r_flags = compute_flags16(op1, op2, true, result);
 
     return (result, r_flags);
 }
 
-fn compute_flags16(op1: u16, op2: u16, result: u16) -> Flags {
+// TODO: can we have a single compute_flags method with params for byte or word?
+// once we have all arithmetic ops we can look into it
+fn compute_flags16(op1: u16, op2: u16, is_add: bool, result: u16) -> Flags {
     let mut flags = Flags::empty();
 
-    if result < op1 {
-        flags = flags | Flags::CARRY_FLAG;
+    if is_add {
+        if result < op1 {
+            flags = flags | Flags::CARRY_FLAG;
+        }
+    } else {
+        if op2 > op1 {
+            flags = flags | Flags::CARRY_FLAG;
+        }
     }
 
     let mut bits_set = 0;
@@ -114,13 +128,18 @@ fn compute_flags16(op1: u16, op2: u16, result: u16) -> Flags {
         flags = flags | Flags::PARITY_FLAG;
     }
 
-    let bit_result = result & (1 << 7);
+    if is_add {
+        let bit_result = result & (1 << 3);
+        let bit_op1 = op1 & (1 << 3);
+        let bit_op2 = op2 & (1 << 3);
 
-    if bit_result == 0 {
-        let bit_op1 = op1 & (1 << 7);
-        let bit_op2 = op2 & (1 << 7);
-
-        if bit_result ^ bit_op1 == (1 << 7) || bit_result ^ bit_op2 == (1 << 7) {
+        if (bit_result & bit_op1 & bit_op2 == 1 << 3)
+            || (bit_result == 0 && bit_op1 | bit_op2 == 1 << 3)
+        {
+            flags = flags | Flags::AUXILIARY_CARRY_FLAG;
+        }
+    } else {
+        if op2 & 0x0F > op1 & 0x0F {
             flags = flags | Flags::AUXILIARY_CARRY_FLAG;
         }
     }
@@ -138,8 +157,16 @@ fn compute_flags16(op1: u16, op2: u16, result: u16) -> Flags {
     let msb_op1 = op1 & (1 << 15);
     let msb_op2 = op2 & (1 << 15);
 
-    if msb_op1 ^ msb_result == (1 << 15) && msb_op2 ^ msb_result == (1 << 15) {
-        flags = flags | Flags::OVERFLOW_FLAG;
+    if is_add {
+        if msb_op1 == msb_op2
+            && (msb_op1 ^ msb_result == (1 << 15) && msb_op2 ^ msb_result == (1 << 15))
+        {
+            flags = flags | Flags::OVERFLOW_FLAG;
+        }
+    } else {
+        if msb_op1 ^ msb_op2 == 1 << 15 && msb_result == msb_op2 {
+            flags = flags | Flags::OVERFLOW_FLAG;
+        }
     }
 
     return flags;
@@ -267,6 +294,33 @@ mod tests {
     }
 
     #[test]
+    fn test_sub16() {
+        assert_eq!(
+            (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
+            sub16(0x55FF, 0x55FF, Flags::empty())
+        );
+        assert_eq!((1, Flags::empty()), sub16(0xFF01, 0xFF00, Flags::empty()));
+        assert_eq!(
+            (14, Flags::AUXILIARY_CARRY_FLAG),
+            sub16(281, 267, Flags::empty())
+        );
+        assert_eq!(
+            (
+                65455,
+                Flags::CARRY_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+                    | Flags::SIGN_FLAG
+            ),
+            sub16(294, 375, Flags::empty())
+        );
+        assert_eq!(
+            (1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG),
+            sub16(32768, 32767, Flags::empty())
+        )
+    }
+
+    #[test]
     fn test_inc16() {
         assert_eq!(
             (
@@ -341,7 +395,10 @@ mod tests {
             ),
             sub8(38, 119, Flags::empty())
         );
-        assert_eq!((1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG), sub8(128, 127, Flags::empty()))
+        assert_eq!(
+            (1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG),
+            sub8(128, 127, Flags::empty())
+        )
     }
 
     #[test]
