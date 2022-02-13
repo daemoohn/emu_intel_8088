@@ -41,7 +41,7 @@ pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
         result += 0x60;
         temp_flags |= Flags::CARRY_FLAG;
     }
-    let mut r_flags = compute_flags8(op1, op1, true, result);
+    let mut r_flags = compute_flags(op1 as u16, op1 as u16, true, false, result as u16);
     r_flags = r_flags - Flags::AUXILIARY_CARRY_FLAG | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
     r_flags = r_flags - Flags::CARRY_FLAG | (temp_flags & Flags::CARRY_FLAG);
 
@@ -94,13 +94,13 @@ pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
 
 pub fn sbb16(op1: u16, op2: u16, carry: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 - op2 - carry;
-    let r_flags = compute_flags16(op1, op2, false, result);
+    let r_flags = compute_flags(op1, op2, false, true, result);
     return (result, r_flags);
 }
 
 pub fn sub16(op1: u16, op2: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 - op2;
-    let r_flags = compute_flags16(op1, op2, false, result);
+    let r_flags = compute_flags(op1, op2, false, true, result);
     return (result, r_flags);
 }
 
@@ -113,84 +113,15 @@ pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
 
 pub fn adc16(op1: u16, op2: u16, carry: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags16(op1, op2, true, result);
+    let r_flags = compute_flags(op1, op2, true, true, result);
     return (result, r_flags);
 }
 
 pub fn add16(op1: u16, op2: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 + op2;
-    let r_flags = compute_flags16(op1, op2, true, result);
+    let r_flags = compute_flags(op1, op2, true, true, result);
 
     return (result, r_flags);
-}
-
-// TODO: can we have a single compute_flags method with params for byte or word?
-// once we have all arithmetic ops we can look into it
-fn compute_flags16(op1: u16, op2: u16, is_add: bool, result: u16) -> Flags {
-    let mut flags = Flags::empty();
-
-    if is_add {
-        if result < op1 {
-            flags = flags | Flags::CARRY_FLAG;
-        }
-    } else {
-        if op2 > op1 {
-            flags = flags | Flags::CARRY_FLAG;
-        }
-    }
-
-    let mut bits_set = 0;
-    for pos in 0..8 {
-        if result & (1 << pos) != 0 {
-            bits_set += 1;
-        }
-    }
-    if bits_set & 1 == 0 {
-        flags = flags | Flags::PARITY_FLAG;
-    }
-
-    if is_add {
-        let bit_result = result & (1 << 3);
-        let bit_op1 = op1 & (1 << 3);
-        let bit_op2 = op2 & (1 << 3);
-
-        if (bit_result & bit_op1 & bit_op2 == 1 << 3)
-            || (bit_result == 0 && bit_op1 | bit_op2 == 1 << 3)
-        {
-            flags = flags | Flags::AUXILIARY_CARRY_FLAG;
-        }
-    } else {
-        if op2 & 0x0F > op1 & 0x0F {
-            flags = flags | Flags::AUXILIARY_CARRY_FLAG;
-        }
-    }
-
-    if result == 0 {
-        flags = flags | Flags::ZERO_FLAG;
-    }
-
-    let msb_result = result & (1 << 15);
-
-    if msb_result == (1 << 15) {
-        flags = flags | Flags::SIGN_FLAG;
-    }
-
-    let msb_op1 = op1 & (1 << 15);
-    let msb_op2 = op2 & (1 << 15);
-
-    if is_add {
-        if msb_op1 == msb_op2
-            && (msb_op1 ^ msb_result == (1 << 15) && msb_op2 ^ msb_result == (1 << 15))
-        {
-            flags = flags | Flags::OVERFLOW_FLAG;
-        }
-    } else {
-        if msb_op1 ^ msb_op2 == 1 << 15 && msb_result == msb_op2 {
-            flags = flags | Flags::OVERFLOW_FLAG;
-        }
-    }
-
-    return flags;
 }
 
 pub fn neg8(op1: u8, _flags: Flags) -> (u8, Flags) {
@@ -210,13 +141,13 @@ pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
 
 pub fn sbb8(op1: u8, op2: u8, carry: u8, _flags: Flags) -> (u8, Flags) {
     let result = op1 - op2 - carry;
-    let r_flags = compute_flags8(op1, op2, false, result);
+    let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
     return (result, r_flags);
 }
 
 pub fn sub8(op1: u8, op2: u8, _flags: Flags) -> (u8, Flags) {
     let result = op1 - op2;
-    let r_flags = compute_flags8(op1, op2, false, result);
+    let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
     return (result, r_flags);
 }
 
@@ -229,19 +160,19 @@ pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
 
 pub fn adc8(op1: u8, op2: u8, carry: u8, _flags: Flags) -> (u8, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags8(op1, op2, true, result);
+    let r_flags = compute_flags(op1 as u16, op2 as u16, true, false, result as u16);
 
     return (result, r_flags);
 }
 
 pub fn add8(op1: u8, op2: u8, _flags: Flags) -> (u8, Flags) {
     let result = op1 + op2;
-    let r_flags = compute_flags8(op1, op2, true, result);
+    let r_flags = compute_flags(op1 as u16, op2 as u16, true, false, result as u16);
 
     return (result, r_flags);
 }
 
-fn compute_flags8(op1: u8, op2: u8, is_add: bool, result: u8) -> Flags {
+fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -> Flags {
     let mut flags = Flags::empty();
 
     if is_add {
@@ -285,24 +216,48 @@ fn compute_flags8(op1: u8, op2: u8, is_add: bool, result: u8) -> Flags {
         flags = flags | Flags::ZERO_FLAG;
     }
 
-    let msb_result = result & (1 << 7);
+    let msb_result;
+    if is_word {
+        msb_result = result & (1 << 15);
 
-    if msb_result == (1 << 7) {
-        flags = flags | Flags::SIGN_FLAG;
-    }
+        if msb_result == (1 << 15) {
+            flags = flags | Flags::SIGN_FLAG;
+        }
 
-    let msb_op1 = op1 & (1 << 7);
-    let msb_op2 = op2 & (1 << 7);
+        let msb_op1 = op1 & (1 << 15);
+        let msb_op2 = op2 & (1 << 15);
 
-    if is_add {
-        if msb_op1 == msb_op2
-            && (msb_op1 ^ msb_result == (1 << 7) && msb_op2 ^ msb_result == (1 << 7))
-        {
-            flags = flags | Flags::OVERFLOW_FLAG;
+        if is_add {
+            if msb_op1 == msb_op2
+                && (msb_op1 ^ msb_result == (1 << 15) && msb_op2 ^ msb_result == (1 << 15))
+            {
+                flags = flags | Flags::OVERFLOW_FLAG;
+            }
+        } else {
+            if msb_op1 ^ msb_op2 == 1 << 15 && msb_result == msb_op2 {
+                flags = flags | Flags::OVERFLOW_FLAG;
+            }
         }
     } else {
-        if msb_op1 ^ msb_op2 == 1 << 7 && msb_result == msb_op2 {
-            flags = flags | Flags::OVERFLOW_FLAG;
+        msb_result = result & (1 << 7);
+
+        if msb_result == (1 << 7) {
+            flags = flags | Flags::SIGN_FLAG;
+        }
+
+        let msb_op1 = op1 & (1 << 7);
+        let msb_op2 = op2 & (1 << 7);
+
+        if is_add {
+            if msb_op1 == msb_op2
+                && (msb_op1 ^ msb_result == (1 << 7) && msb_op2 ^ msb_result == (1 << 7))
+            {
+                flags = flags | Flags::OVERFLOW_FLAG;
+            }
+        } else {
+            if msb_op1 ^ msb_op2 == 1 << 7 && msb_result == msb_op2 {
+                flags = flags | Flags::OVERFLOW_FLAG;
+            }
         }
     }
 
