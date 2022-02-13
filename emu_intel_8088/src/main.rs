@@ -41,7 +41,7 @@ pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
         result += 0x60;
         temp_flags |= Flags::CARRY_FLAG;
     }
-    let mut r_flags = compute_flags8(op1, op1, result);
+    let mut r_flags = compute_flags8(op1, op1, true, result);
     r_flags = r_flags - Flags::AUXILIARY_CARRY_FLAG | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
     r_flags = r_flags - Flags::CARRY_FLAG | (temp_flags & Flags::CARRY_FLAG);
 
@@ -145,6 +145,12 @@ fn compute_flags16(op1: u16, op2: u16, result: u16) -> Flags {
     return flags;
 }
 
+pub fn sub8(op1: u8, op2: u8, _flags: Flags) -> (u8, Flags) {
+    let result = op1 - op2;
+    let r_flags = compute_flags8(op1, op2, false, result);
+    return (result, r_flags);
+}
+
 pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
     let (result, mut r_flags) = add8(op1, 1, Flags::empty());
     // we remove carry flag from result flags and add it only if the initial flags contained it
@@ -154,23 +160,29 @@ pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
 
 pub fn adc8(op1: u8, op2: u8, carry: u8, _flags: Flags) -> (u8, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags8(op1, op2, result);
+    let r_flags = compute_flags8(op1, op2, true, result);
 
     return (result, r_flags);
 }
 
 pub fn add8(op1: u8, op2: u8, _flags: Flags) -> (u8, Flags) {
     let result = op1 + op2;
-    let r_flags = compute_flags8(op1, op2, result);
+    let r_flags = compute_flags8(op1, op2, true, result);
 
     return (result, r_flags);
 }
 
-fn compute_flags8(op1: u8, op2: u8, result: u8) -> Flags {
+fn compute_flags8(op1: u8, op2: u8, is_add: bool, result: u8) -> Flags {
     let mut flags = Flags::empty();
 
-    if result < op1 {
-        flags = flags | Flags::CARRY_FLAG;
+    if is_add {
+        if result < op1 {
+            flags = flags | Flags::CARRY_FLAG;
+        }
+    } else {
+        if op2 > op1 {
+            flags = flags | Flags::CARRY_FLAG;
+        }
     }
 
     let mut bits_set = 0;
@@ -184,13 +196,18 @@ fn compute_flags8(op1: u8, op2: u8, result: u8) -> Flags {
         flags = flags | Flags::PARITY_FLAG;
     }
 
-    let bit_result = result & (1 << 3);
-
-    if bit_result == 0 {
+    if is_add {
+        let bit_result = result & (1 << 3);
         let bit_op1 = op1 & (1 << 3);
         let bit_op2 = op2 & (1 << 3);
 
-        if bit_result ^ bit_op1 == (1 << 3) || bit_result ^ bit_op2 == (1 << 3) {
+        if (bit_result & bit_op1 & bit_op2 == 1 << 3)
+            || (bit_result == 0 && bit_op1 | bit_op2 == 1 << 3)
+        {
+            flags = flags | Flags::AUXILIARY_CARRY_FLAG;
+        }
+    } else {
+        if op2 & 0x0F > op1 & 0x0F {
             flags = flags | Flags::AUXILIARY_CARRY_FLAG;
         }
     }
@@ -208,8 +225,16 @@ fn compute_flags8(op1: u8, op2: u8, result: u8) -> Flags {
     let msb_op1 = op1 & (1 << 7);
     let msb_op2 = op2 & (1 << 7);
 
-    if msb_op1 ^ msb_result == (1 << 7) && msb_op2 ^ msb_result == (1 << 7) {
-        flags = flags | Flags::OVERFLOW_FLAG;
+    if is_add {
+        if msb_op1 == msb_op2
+            && (msb_op1 ^ msb_result == (1 << 7) && msb_op2 ^ msb_result == (1 << 7))
+        {
+            flags = flags | Flags::OVERFLOW_FLAG;
+        }
+    } else {
+        if msb_op1 ^ msb_op2 == 1 << 7 && msb_result == msb_op2 {
+            flags = flags | Flags::OVERFLOW_FLAG;
+        }
     }
 
     return flags;
@@ -296,6 +321,30 @@ mod tests {
     }
 
     #[test]
+    fn test_sub8() {
+        assert_eq!(
+            (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
+            sub8(0x55, 0x55, Flags::empty())
+        );
+        assert_eq!((1, Flags::empty()), sub8(3, 2, Flags::empty()));
+        assert_eq!(
+            (14, Flags::AUXILIARY_CARRY_FLAG),
+            sub8(25, 11, Flags::empty())
+        );
+        assert_eq!(
+            (
+                175,
+                Flags::CARRY_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+                    | Flags::SIGN_FLAG
+            ),
+            sub8(38, 119, Flags::empty())
+        );
+        assert_eq!((1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG), sub8(128, 127, Flags::empty()))
+    }
+
+    #[test]
     fn test_inc8() {
         assert_eq!(
             (
@@ -318,6 +367,13 @@ mod tests {
 
     #[test]
     fn test_add8() {
+        assert_eq!(
+            (
+                137,
+                Flags::AUXILIARY_CARRY_FLAG | Flags::SIGN_FLAG | Flags::OVERFLOW_FLAG
+            ),
+            add8(43, 94, Flags::empty())
+        );
         assert_eq!(
             (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
             add8(0, 0, Flags::empty())
