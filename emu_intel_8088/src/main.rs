@@ -77,6 +77,12 @@ pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     return (result, r_flags);
 }
 
+pub fn sbb16(op1: u16, op2: u16, carry: u16, _flags: Flags) -> (u16, Flags) {
+    let result = op1 - op2 - carry;
+    let r_flags = compute_flags16(op1, op2, false, result);
+    return (result, r_flags);
+}
+
 pub fn sub16(op1: u16, op2: u16, _flags: Flags) -> (u16, Flags) {
     let result = op1 - op2;
     let r_flags = compute_flags16(op1, op2, false, result);
@@ -170,6 +176,12 @@ fn compute_flags16(op1: u16, op2: u16, is_add: bool, result: u16) -> Flags {
     }
 
     return flags;
+}
+
+pub fn sbb8(op1: u8, op2: u8, carry: u8, _flags: Flags) -> (u8, Flags) {
+    let result = op1 - op2 - carry;
+    let r_flags = compute_flags8(op1, op2, false, result);
+    return (result, r_flags);
 }
 
 pub fn sub8(op1: u8, op2: u8, _flags: Flags) -> (u8, Flags) {
@@ -294,6 +306,16 @@ mod tests {
     }
 
     #[test]
+    fn test_sbb16() {
+        assert_eq!(
+            (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
+            sbb16(0, 0, 0, Flags::empty())
+        );
+        assert_eq!((1, Flags::empty()), sbb16(1, 0, 0, Flags::empty()));
+        assert_eq!((1, Flags::empty()), sbb16(3, 1, 1, Flags::empty()));
+    }
+
+    #[test]
     fn test_sub16() {
         assert_eq!(
             (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
@@ -372,6 +394,16 @@ mod tests {
             ),
             add16(0x7FFF, 1, Flags::empty())
         );
+    }
+
+    #[test]
+    fn test_sbb8() {
+        assert_eq!(
+            (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
+            sbb8(0, 0, 0, Flags::empty())
+        );
+        assert_eq!((1, Flags::empty()), sbb8(1, 0, 0, Flags::empty()));
+        assert_eq!((1, Flags::empty()), sbb8(3, 1, 1, Flags::empty()));
     }
 
     #[test]
