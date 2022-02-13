@@ -124,6 +124,11 @@ pub fn add16(op1: u16, op2: u16, _flags: Flags) -> (u16, Flags) {
     return (result, r_flags);
 }
 
+pub fn cmp8(op1: u8, op2: u8, _flags: Flags) -> Flags {
+    let diff = op1 - op2;
+    return compute_flags(op1 as u16, op2 as u16, false, false, diff as u16);
+}
+
 pub fn neg8(op1: u8, _flags: Flags) -> (u8, Flags) {
     let (result, mut r_flags) = sub8(0, op1, _flags);
     if op1 == 0 {
@@ -422,6 +427,33 @@ mod tests {
     }
 
     #[test]
+    fn test_cmp8() {
+        assert_eq!(
+            Flags::ZERO_FLAG | Flags::PARITY_FLAG,
+            cmp8(0x55, 0x55, Flags::empty())
+        );
+        assert_eq!((1, Flags::empty()), sub8(3, 2, Flags::empty()));
+        assert_eq!(
+            (14, Flags::AUXILIARY_CARRY_FLAG),
+            sub8(25, 11, Flags::empty())
+        );
+        assert_eq!(
+            (
+                175,
+                Flags::CARRY_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+                    | Flags::SIGN_FLAG
+            ),
+            sub8(38, 119, Flags::empty())
+        );
+        assert_eq!(
+            (1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG),
+            sub8(128, 127, Flags::empty())
+        )
+    }
+
+    #[test]
     fn test_neg8() {
         assert_eq!(
             (
@@ -477,24 +509,15 @@ mod tests {
             (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
             sub8(0x55, 0x55, Flags::empty())
         );
-        assert_eq!((1, Flags::empty()), sub8(3, 2, Flags::empty()));
+        assert_eq!(Flags::empty(), cmp8(3, 2, Flags::empty()));
+        assert_eq!(Flags::AUXILIARY_CARRY_FLAG, cmp8(25, 11, Flags::empty()));
         assert_eq!(
-            (14, Flags::AUXILIARY_CARRY_FLAG),
-            sub8(25, 11, Flags::empty())
+            Flags::CARRY_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG | Flags::SIGN_FLAG,
+            cmp8(38, 119, Flags::empty())
         );
         assert_eq!(
-            (
-                175,
-                Flags::CARRY_FLAG
-                    | Flags::PARITY_FLAG
-                    | Flags::AUXILIARY_CARRY_FLAG
-                    | Flags::SIGN_FLAG
-            ),
-            sub8(38, 119, Flags::empty())
-        );
-        assert_eq!(
-            (1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG),
-            sub8(128, 127, Flags::empty())
+            Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG,
+            cmp8(128, 127, Flags::empty())
         )
     }
 
