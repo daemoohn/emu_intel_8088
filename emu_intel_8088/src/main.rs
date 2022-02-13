@@ -77,6 +77,14 @@ pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     return (result, r_flags);
 }
 
+pub fn neg16(op1: u16, _flags: Flags) -> (u16, Flags) {
+    let (result, mut r_flags) = sub16(0, op1, _flags);
+    if op1 == 0 {
+        r_flags -= Flags::CARRY_FLAG;
+    }
+    return (result, r_flags);
+}
+
 pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = sub16(op1, 1, Flags::empty());
     // we remove carry flag from result flags and add it only if the initial flags contained it
@@ -183,6 +191,14 @@ fn compute_flags16(op1: u16, op2: u16, is_add: bool, result: u16) -> Flags {
     }
 
     return flags;
+}
+
+pub fn neg8(op1: u8, _flags: Flags) -> (u8, Flags) {
+    let (result, mut r_flags) = sub8(0, op1, _flags);
+    if op1 == 0 {
+        r_flags -= Flags::CARRY_FLAG;
+    }
+    return (result, r_flags);
 }
 
 pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
@@ -320,6 +336,35 @@ mod tests {
     }
 
     #[test]
+    fn test_neg16() {
+        assert_eq!(
+            (
+                0xFFF5,
+                Flags::CARRY_FLAG
+                    | Flags::SIGN_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+            ),
+            neg16(11, Flags::empty())
+        );
+        assert_eq!(
+            (0x7FF0, Flags::CARRY_FLAG | Flags::PARITY_FLAG),
+            neg16(0x8010, Flags::empty())
+        );
+        assert_eq!(
+            (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
+            neg16(0, Flags::empty())
+        );
+        assert_eq!(
+            (
+                0x8000,
+                Flags::CARRY_FLAG | Flags::PARITY_FLAG | Flags::SIGN_FLAG | Flags::OVERFLOW_FLAG
+            ),
+            neg16(0x8000, Flags::empty())
+        );
+    }
+
+    #[test]
     fn test_dec16() {
         assert_eq!(
             (
@@ -418,6 +463,35 @@ mod tests {
                     | Flags::PARITY_FLAG
             ),
             add16(0x7FFF, 1, Flags::empty())
+        );
+    }
+
+    #[test]
+    fn test_neg8() {
+        assert_eq!(
+            (
+                245,
+                Flags::CARRY_FLAG
+                    | Flags::SIGN_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+            ),
+            neg8(11, Flags::empty())
+        );
+        assert_eq!(
+            (56, Flags::CARRY_FLAG | Flags::AUXILIARY_CARRY_FLAG),
+            neg8(200, Flags::empty())
+        );
+        assert_eq!(
+            (0, Flags::ZERO_FLAG | Flags::PARITY_FLAG),
+            neg8(0, Flags::empty())
+        );
+        assert_eq!(
+            (
+                0x80,
+                Flags::CARRY_FLAG | Flags::SIGN_FLAG | Flags::OVERFLOW_FLAG
+            ),
+            neg8(0x80, Flags::empty())
         );
     }
 
