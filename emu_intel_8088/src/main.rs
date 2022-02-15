@@ -38,7 +38,7 @@ pub fn aas(op1: u16, flags: Flags) -> (u16, Flags) {
     // AL = AL and 0Fh
     let mut r_flags = Flags::empty();
     let mut result = op1;
-    if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+    if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result -= 262;
         r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
     } else {
@@ -63,12 +63,12 @@ pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
     // endif
     let mut temp_flags = Flags::empty();
     let mut result = op1;
-    if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+    if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result += 6;
         temp_flags |= Flags::AUXILIARY_CARRY_FLAG;
     }
-    if result > 0x9F || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
-        result += 0x60;
+    if result > 0x009F || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
+        result += 0x0060;
         temp_flags |= Flags::CARRY_FLAG;
     }
     let mut r_flags = compute_flags(op1 as u16, op1 as u16, true, false, result as u16);
@@ -98,7 +98,7 @@ pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     // AL = AL and 0Fh
     let mut r_flags = Flags::empty();
     let mut result = op1;
-    if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+    if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result += 262;
         r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
     } else {
