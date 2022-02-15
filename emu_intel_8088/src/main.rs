@@ -19,6 +19,36 @@ bitflags! {
     }
 }
 
+pub fn aas(op1: u16, flags: Flags) -> (u16, Flags) {
+    // based on https://stackoverflow.com/questions/51710279/assembly-instructions-aaa
+    // note: op1 is ax
+    // IF ((( AL and 0FH ) > 9 ) or (AF==1)
+    //     IF CPU<286 THEN
+    //         AL = AL-6
+    //     ELSE
+    //         AX = AX-6
+    //     ENDIF
+    //     AH = AH-1
+    //     CF = 1
+    //     AF = 1
+    // ELSE
+    //     CF = 0
+    //     AF = 0
+    // ENDIF
+    // AL = AL and 0Fh
+    let mut r_flags = Flags::empty();
+    let mut result = op1;
+    if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+        result -= 262;
+        r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+    } else {
+        r_flags -= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+    }
+    result &= 0xFF0F;
+
+    return (result, r_flags);
+}
+
 pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
     // note: op1 is ax
     // based on https://stackoverflow.com/questions/18945247/how-does-aaa-work-in-8086-instruction-set
@@ -71,6 +101,8 @@ pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     if op1 & 0x0F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result += 262;
         r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+    } else {
+        r_flags -= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
     }
     result &= 0xFF0F;
 
@@ -82,8 +114,21 @@ pub fn cmp16(op1: u16, op2: u16) -> Flags {
     return compute_flags(op1, op2, false, true, diff);
 }
 
+pub fn cmp8(op1: u8, op2: u8) -> Flags {
+    let diff = op1 - op2;
+    return compute_flags(op1 as u16, op2 as u16, false, false, diff as u16);
+}
+
 pub fn neg16(op1: u16) -> (u16, Flags) {
     let (result, mut r_flags) = sub16(0, op1);
+    if op1 == 0 {
+        r_flags -= Flags::CARRY_FLAG;
+    }
+    return (result, r_flags);
+}
+
+pub fn neg8(op1: u8) -> (u8, Flags) {
+    let (result, mut r_flags) = sub8(0, op1);
     if op1 == 0 {
         r_flags -= Flags::CARRY_FLAG;
     }
@@ -97,9 +142,22 @@ pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
     return (result, r_flags);
 }
 
+pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
+    let (result, mut r_flags) = sub8(op1, 1);
+    // we remove carry flag from result flags and add it only if the initial flags contained it
+    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
+    return (result, r_flags);
+}
+
 pub fn sbb16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 - op2 - carry;
     let r_flags = compute_flags(op1, op2, false, true, result);
+    return (result, r_flags);
+}
+
+pub fn sbb8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
+    let result = op1 - op2 - carry;
+    let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
     return (result, r_flags);
 }
 
@@ -109,8 +167,21 @@ pub fn sub16(op1: u16, op2: u16) -> (u16, Flags) {
     return (result, r_flags);
 }
 
+pub fn sub8(op1: u8, op2: u8) -> (u8, Flags) {
+    let result = op1 - op2;
+    let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
+    return (result, r_flags);
+}
+
 pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = add16(op1, 1);
+    // we remove carry flag from result flags and add it only if the initial flags contained it
+    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
+    return (result, r_flags);
+}
+
+pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
+    let (result, mut r_flags) = add8(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
     r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
     return (result, r_flags);
@@ -122,55 +193,16 @@ pub fn adc16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     return (result, r_flags);
 }
 
-pub fn add16(op1: u16, op2: u16) -> (u16, Flags) {
-    let result = op1 + op2;
-    let r_flags = compute_flags(op1, op2, true, true, result);
-
-    return (result, r_flags);
-}
-
-pub fn cmp8(op1: u8, op2: u8) -> Flags {
-    let diff = op1 - op2;
-    return compute_flags(op1 as u16, op2 as u16, false, false, diff as u16);
-}
-
-pub fn neg8(op1: u8) -> (u8, Flags) {
-    let (result, mut r_flags) = sub8(0, op1);
-    if op1 == 0 {
-        r_flags -= Flags::CARRY_FLAG;
-    }
-    return (result, r_flags);
-}
-
-pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
-    let (result, mut r_flags) = sub8(op1, 1);
-    // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
-    return (result, r_flags);
-}
-
-pub fn sbb8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
-    let result = op1 - op2 - carry;
-    let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
-    return (result, r_flags);
-}
-
-pub fn sub8(op1: u8, op2: u8) -> (u8, Flags) {
-    let result = op1 - op2;
-    let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
-    return (result, r_flags);
-}
-
-pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
-    let (result, mut r_flags) = add8(op1, 1);
-    // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
-    return (result, r_flags);
-}
-
 pub fn adc8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 + op2 + carry;
     let r_flags = compute_flags(op1 as u16, op2 as u16, true, false, result as u16);
+
+    return (result, r_flags);
+}
+
+pub fn add16(op1: u16, op2: u16) -> (u16, Flags) {
+    let result = op1 + op2;
+    let r_flags = compute_flags(op1, op2, true, true, result);
 
     return (result, r_flags);
 }
@@ -294,6 +326,7 @@ mod tests {
 
     #[test]
     fn test_aaa() {
+        // it doesn't cover all the branches
         assert_eq!(
             (257, Flags::CARRY_FLAG | Flags::AUXILIARY_CARRY_FLAG),
             aaa(11, Flags::empty())
@@ -312,6 +345,21 @@ mod tests {
         assert_eq!(
             Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG,
             cmp16(32768, 32767)
+        )
+    }
+
+    #[test]
+    fn test_cmp8() {
+        assert_eq!(Flags::ZERO_FLAG | Flags::PARITY_FLAG, cmp8(0x55, 0x55));
+        assert_eq!(Flags::empty(), cmp8(3, 2));
+        assert_eq!(Flags::AUXILIARY_CARRY_FLAG, cmp8(25, 11));
+        assert_eq!(
+            Flags::CARRY_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG | Flags::SIGN_FLAG,
+            cmp8(38, 119)
+        );
+        assert_eq!(
+            Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG,
+            cmp8(128, 127)
         )
     }
 
@@ -342,6 +390,32 @@ mod tests {
     }
 
     #[test]
+    fn test_neg8() {
+        assert_eq!(
+            (
+                245,
+                Flags::CARRY_FLAG
+                    | Flags::SIGN_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+            ),
+            neg8(11)
+        );
+        assert_eq!(
+            (56, Flags::CARRY_FLAG | Flags::AUXILIARY_CARRY_FLAG),
+            neg8(200)
+        );
+        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), neg8(0));
+        assert_eq!(
+            (
+                0x80,
+                Flags::CARRY_FLAG | Flags::SIGN_FLAG | Flags::OVERFLOW_FLAG
+            ),
+            neg8(0x80)
+        );
+    }
+
+    #[test]
     fn test_dec16() {
         assert_eq!(
             (
@@ -353,10 +427,28 @@ mod tests {
     }
 
     #[test]
+    fn test_dec8() {
+        assert_eq!(
+            (
+                0xFF,
+                Flags::SIGN_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG
+            ),
+            dec8(0, Flags::empty())
+        );
+    }
+
+    #[test]
     fn test_sbb16() {
         assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), sbb16(0, 0, 0));
         assert_eq!((1, Flags::empty()), sbb16(1, 0, 0));
         assert_eq!((1, Flags::empty()), sbb16(3, 1, 1));
+    }
+
+    #[test]
+    fn test_sbb8() {
+        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), sbb8(0, 0, 0));
+        assert_eq!((1, Flags::empty()), sbb8(1, 0, 0));
+        assert_eq!((1, Flags::empty()), sbb8(3, 1, 1));
     }
 
     #[test]
@@ -384,6 +476,27 @@ mod tests {
     }
 
     #[test]
+    fn test_sub8() {
+        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), sub8(0x55, 0x55));
+        assert_eq!((1, Flags::empty()), sub8(3, 2));
+        assert_eq!((14, Flags::AUXILIARY_CARRY_FLAG), sub8(25, 11));
+        assert_eq!(
+            (
+                175,
+                Flags::CARRY_FLAG
+                    | Flags::PARITY_FLAG
+                    | Flags::AUXILIARY_CARRY_FLAG
+                    | Flags::SIGN_FLAG
+            ),
+            sub8(38, 119)
+        );
+        assert_eq!(
+            (1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG),
+            sub8(128, 127)
+        )
+    }
+
+    #[test]
     fn test_inc16() {
         assert_eq!(
             (
@@ -395,10 +508,28 @@ mod tests {
     }
 
     #[test]
+    fn test_inc8() {
+        assert_eq!(
+            (
+                0,
+                Flags::ZERO_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG
+            ),
+            inc8(0xFF, Flags::empty())
+        );
+    }
+
+    #[test]
     fn test_adc16() {
         assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), adc16(0, 0, 0));
         assert_eq!((1, Flags::empty()), adc16(0, 0, 1));
         assert_eq!((2, Flags::empty()), adc16(1, 0, 1));
+    }
+
+    #[test]
+    fn test_adc8() {
+        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), adc8(0, 0, 0));
+        assert_eq!((1, Flags::empty()), adc8(0, 0, 1));
+        assert_eq!((2, Flags::empty()), adc8(1, 0, 1));
     }
 
     #[test]
@@ -429,104 +560,6 @@ mod tests {
             ),
             add16(0x7FFF, 1)
         );
-    }
-
-    #[test]
-    fn test_cmp8() {
-        assert_eq!(Flags::ZERO_FLAG | Flags::PARITY_FLAG, cmp8(0x55, 0x55));
-        assert_eq!(Flags::empty(), cmp8(3, 2));
-        assert_eq!(Flags::AUXILIARY_CARRY_FLAG, cmp8(25, 11));
-        assert_eq!(
-            Flags::CARRY_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG | Flags::SIGN_FLAG,
-            cmp8(38, 119)
-        );
-        assert_eq!(
-            Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG,
-            cmp8(128, 127)
-        )
-    }
-
-    #[test]
-    fn test_neg8() {
-        assert_eq!(
-            (
-                245,
-                Flags::CARRY_FLAG
-                    | Flags::SIGN_FLAG
-                    | Flags::PARITY_FLAG
-                    | Flags::AUXILIARY_CARRY_FLAG
-            ),
-            neg8(11)
-        );
-        assert_eq!(
-            (56, Flags::CARRY_FLAG | Flags::AUXILIARY_CARRY_FLAG),
-            neg8(200)
-        );
-        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), neg8(0));
-        assert_eq!(
-            (
-                0x80,
-                Flags::CARRY_FLAG | Flags::SIGN_FLAG | Flags::OVERFLOW_FLAG
-            ),
-            neg8(0x80)
-        );
-    }
-
-    #[test]
-    fn test_dec8() {
-        assert_eq!(
-            (
-                0xFF,
-                Flags::SIGN_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG
-            ),
-            dec8(0, Flags::empty())
-        );
-    }
-
-    #[test]
-    fn test_sbb8() {
-        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), sbb8(0, 0, 0));
-        assert_eq!((1, Flags::empty()), sbb8(1, 0, 0));
-        assert_eq!((1, Flags::empty()), sbb8(3, 1, 1));
-    }
-
-    #[test]
-    fn test_sub8() {
-        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), sub8(0x55, 0x55));
-        assert_eq!((1, Flags::empty()), sub8(3, 2));
-        assert_eq!((14, Flags::AUXILIARY_CARRY_FLAG), sub8(25, 11));
-        assert_eq!(
-            (
-                175,
-                Flags::CARRY_FLAG
-                    | Flags::PARITY_FLAG
-                    | Flags::AUXILIARY_CARRY_FLAG
-                    | Flags::SIGN_FLAG
-            ),
-            sub8(38, 119)
-        );
-        assert_eq!(
-            (1, Flags::AUXILIARY_CARRY_FLAG | Flags::OVERFLOW_FLAG),
-            sub8(128, 127)
-        )
-    }
-
-    #[test]
-    fn test_inc8() {
-        assert_eq!(
-            (
-                0,
-                Flags::ZERO_FLAG | Flags::PARITY_FLAG | Flags::AUXILIARY_CARRY_FLAG
-            ),
-            inc8(0xFF, Flags::empty())
-        );
-    }
-
-    #[test]
-    fn test_adc8() {
-        assert_eq!((0, Flags::ZERO_FLAG | Flags::PARITY_FLAG), adc8(0, 0, 0));
-        assert_eq!((1, Flags::empty()), adc8(0, 0, 1));
-        assert_eq!((2, Flags::empty()), adc8(1, 0, 1));
     }
 
     #[test]
