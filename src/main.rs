@@ -139,14 +139,14 @@ pub fn neg8(op1: u8) -> (u8, Flags) {
 pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = sub16(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
     (result, r_flags)
 }
 
 pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
     let (result, mut r_flags) = sub8(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
     (result, r_flags)
 }
 
@@ -177,14 +177,14 @@ pub fn sub8(op1: u8, op2: u8) -> (u8, Flags) {
 pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = add16(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
     (result, r_flags)
 }
 
 pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
     let (result, mut r_flags) = add8(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
     (result, r_flags)
 }
 
