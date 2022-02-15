@@ -3,28 +3,34 @@ on: push
 name: Continuous integration
 
 jobs:
-  ci:
+  CI:
     runs-on: ubuntu-latest
     name: Rust project
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install toolchain <Stable>
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
           components: rustc, cargo, rustfmt, rust-std, clippy
-      - uses: actions-rs/cargo@v1
+      - name: Build
+        uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --all-features
-      - uses: actions-rs/cargo@v1
+      - name: Test (to fix coverage?)
+        uses: actions-rs/cargo@v1
         with:
           command: test
-      - uses: actions-rs/cargo@v1
+      - name: Checking format with rustfmt
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      - uses: actions-rs/cargo@v1
+      - name: Linting with clippy
+        uses: actions-rs/clippy-check@v1
         with:
-          command: clippy
+          token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
