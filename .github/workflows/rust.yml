@@ -9,7 +9,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Install toolchain <Stable>
+      - name: Install toolchain <Nightly>
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -19,7 +19,7 @@ jobs:
         uses: actions-rs/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Test (to fix coverage?)
+      - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           command: test
@@ -28,7 +28,15 @@ jobs:
           CARGO_INCREMENTAL: '0'
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
-      - uses: actions-rs/grcov@v0.1
+      - name: Runs code coverage tool
+        uses: actions-rs/grcov@v0.1
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          directory: /home/user/build/
+          fail_ci_if_error: true
+          flags: unittests
+          verbose: true
       - name: Checking format with rustfmt
         uses: actions-rs/cargo@v1
         with:
