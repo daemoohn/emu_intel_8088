@@ -3,40 +3,53 @@ on: push
 name: Continuous integration
 
 jobs:
-  ci:
+  CI:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
-          - 1.31.0  # MSRV
-
+    name: Rust project
     steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install toolchain <Nightly>
+        uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
+          toolchain: nightly
           override: true
-          components: rustfmt, clippy
-
-      - uses: actions-rs/cargo@v1
+          components: rustc, cargo, rustfmt, rust-std, clippy
+      - name: Security audit for crates
+        uses: actions-rs/audit-check@v1
         with:
-          command: build
-
-      - uses: actions-rs/cargo@v1
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run tests
+        uses: actions-rs/cargo@v1
         with:
           command: test
-
-      - uses: actions-rs/cargo@v1
+          args: --all-features --no-fail-fast
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+          RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+      - name: Runs code coverage tool
+        uses: actions-rs/grcov@v0.1
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
+        with:
+          directory: /home/runner/work/emu_intel_8088/emu_intel_8088/
+          files: ./lcov.info
+          fail_ci_if_error: true
+          flags: unittests
+          verbose: true
+      - name: Check format with rustfmt
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-
-      - uses: actions-rs/cargo@v1
+      - name: Lint with clippy
+        uses: actions-rs/clippy-check@v1
         with:
-          command: clippy
-          args: -- -D warnings
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --all-features
