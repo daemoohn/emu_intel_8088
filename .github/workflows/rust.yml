@@ -33,16 +33,17 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v2
         with:
-          directory: /home/user/build/
+          directory: /home/runner/work/emu_intel_8088/emu_intel_8088/
+          files: ./lcov.info
           fail_ci_if_error: true
           flags: unittests
           verbose: true
-      - name: Checking format with rustfmt
+      - name: Check format with rustfmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-      - name: Linting with clippy
+      - name: Lint with clippy
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
