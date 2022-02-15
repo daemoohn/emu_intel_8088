@@ -15,6 +15,10 @@ jobs:
           toolchain: stable
           override: true
           components: rustc, cargo, rustfmt, rust-std, clippy
+      - name: Security audit for crates
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build
         uses: actions-rs/cargo@v1
         with:
