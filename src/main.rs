@@ -46,7 +46,7 @@ pub fn aas(op1: u16, flags: Flags) -> (u16, Flags) {
     }
     result &= 0xFF0F;
 
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
@@ -72,10 +72,10 @@ pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
         temp_flags |= Flags::CARRY_FLAG;
     }
     let mut r_flags = compute_flags(op1 as u16, op1 as u16, true, false, result as u16);
-    r_flags = r_flags - Flags::AUXILIARY_CARRY_FLAG | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
-    r_flags = r_flags - Flags::CARRY_FLAG | (temp_flags & Flags::CARRY_FLAG);
+    r_flags = (r_flags - Flags::AUXILIARY_CARRY_FLAG) | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
+    r_flags = (r_flags - Flags::CARRY_FLAG) | (temp_flags & Flags::CARRY_FLAG);
 
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
@@ -106,17 +106,17 @@ pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     }
     result &= 0xFF0F;
 
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn cmp16(op1: u16, op2: u16) -> Flags {
     let diff = op1 - op2;
-    return compute_flags(op1, op2, false, true, diff);
+    compute_flags(op1, op2, false, true, diff)
 }
 
 pub fn cmp8(op1: u8, op2: u8) -> Flags {
     let diff = op1 - op2;
-    return compute_flags(op1 as u16, op2 as u16, false, false, diff as u16);
+    compute_flags(op1 as u16, op2 as u16, false, false, diff as u16)
 }
 
 pub fn neg16(op1: u16) -> (u16, Flags) {
@@ -124,7 +124,8 @@ pub fn neg16(op1: u16) -> (u16, Flags) {
     if op1 == 0 {
         r_flags -= Flags::CARRY_FLAG;
     }
-    return (result, r_flags);
+
+    (result, r_flags)
 }
 
 pub fn neg8(op1: u8) -> (u8, Flags) {
@@ -132,86 +133,86 @@ pub fn neg8(op1: u8) -> (u8, Flags) {
     if op1 == 0 {
         r_flags -= Flags::CARRY_FLAG;
     }
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = sub16(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
-    return (result, r_flags);
+    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    (result, r_flags)
 }
 
 pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
     let (result, mut r_flags) = sub8(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
-    return (result, r_flags);
+    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    (result, r_flags)
 }
 
 pub fn sbb16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 - op2 - carry;
     let r_flags = compute_flags(op1, op2, false, true, result);
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn sbb8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 - op2 - carry;
     let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn sub16(op1: u16, op2: u16) -> (u16, Flags) {
     let result = op1 - op2;
     let r_flags = compute_flags(op1, op2, false, true, result);
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn sub8(op1: u8, op2: u8) -> (u8, Flags) {
     let result = op1 - op2;
     let r_flags = compute_flags(op1 as u16, op2 as u16, false, false, result as u16);
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
     let (result, mut r_flags) = add16(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
-    return (result, r_flags);
+    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    (result, r_flags)
 }
 
 pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
     let (result, mut r_flags) = add8(op1, 1);
     // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags = r_flags - Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
-    return (result, r_flags);
+    r_flags = r_flags - (Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG));
+    (result, r_flags)
 }
 
 pub fn adc16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 + op2 + carry;
     let r_flags = compute_flags(op1, op2, true, true, result);
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn adc8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 + op2 + carry;
     let r_flags = compute_flags(op1 as u16, op2 as u16, true, false, result as u16);
 
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn add16(op1: u16, op2: u16) -> (u16, Flags) {
     let result = op1 + op2;
     let r_flags = compute_flags(op1, op2, true, true, result);
 
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 pub fn add8(op1: u8, op2: u8) -> (u8, Flags) {
     let result = op1 + op2;
     let r_flags = compute_flags(op1 as u16, op2 as u16, true, false, result as u16);
 
-    return (result, r_flags);
+    (result, r_flags)
 }
 
 fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -> Flags {
@@ -219,12 +220,10 @@ fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -
 
     if is_add {
         if result < op1 {
-            flags = flags | Flags::CARRY_FLAG;
+            flags |= Flags::CARRY_FLAG;
         }
-    } else {
-        if op2 > op1 {
-            flags = flags | Flags::CARRY_FLAG;
-        }
+    } else if op2 > op1 {
+        flags |= Flags::CARRY_FLAG;
     }
 
     let mut bits_set = 0;
@@ -235,7 +234,7 @@ fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -
         }
     }
     if bits_set & 1 == 0 {
-        flags = flags | Flags::PARITY_FLAG;
+        flags |= Flags::PARITY_FLAG;
     }
 
     if is_add {
@@ -246,16 +245,14 @@ fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -
         if (bit_result & bit_op1 & bit_op2 == 1 << 3)
             || (bit_result == 0 && bit_op1 | bit_op2 == 1 << 3)
         {
-            flags = flags | Flags::AUXILIARY_CARRY_FLAG;
+            flags |= Flags::AUXILIARY_CARRY_FLAG;
         }
-    } else {
-        if op2 & 0x0F > op1 & 0x0F {
-            flags = flags | Flags::AUXILIARY_CARRY_FLAG;
-        }
+    } else if op2 & 0x0F > op1 & 0x0F {
+        flags |= Flags::AUXILIARY_CARRY_FLAG;
     }
 
     if result == 0 {
-        flags = flags | Flags::ZERO_FLAG;
+        flags |= Flags::ZERO_FLAG;
     }
 
     let msb_result;
@@ -263,7 +260,7 @@ fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -
         msb_result = result & (1 << 15);
 
         if msb_result == (1 << 15) {
-            flags = flags | Flags::SIGN_FLAG;
+            flags |= Flags::SIGN_FLAG;
         }
 
         let msb_op1 = op1 & (1 << 15);
@@ -273,18 +270,16 @@ fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -
             if msb_op1 == msb_op2
                 && (msb_op1 ^ msb_result == (1 << 15) && msb_op2 ^ msb_result == (1 << 15))
             {
-                flags = flags | Flags::OVERFLOW_FLAG;
+                flags |= Flags::OVERFLOW_FLAG;
             }
-        } else {
-            if msb_op1 ^ msb_op2 == 1 << 15 && msb_result == msb_op2 {
-                flags = flags | Flags::OVERFLOW_FLAG;
-            }
+        } else if msb_op1 ^ msb_op2 == 1 << 15 && msb_result == msb_op2 {
+            flags |= Flags::OVERFLOW_FLAG;
         }
     } else {
         msb_result = result & (1 << 7);
 
         if msb_result == (1 << 7) {
-            flags = flags | Flags::SIGN_FLAG;
+            flags |= Flags::SIGN_FLAG;
         }
 
         let msb_op1 = op1 & (1 << 7);
@@ -294,16 +289,14 @@ fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -
             if msb_op1 == msb_op2
                 && (msb_op1 ^ msb_result == (1 << 7) && msb_op2 ^ msb_result == (1 << 7))
             {
-                flags = flags | Flags::OVERFLOW_FLAG;
+                flags |= Flags::OVERFLOW_FLAG;
             }
-        } else {
-            if msb_op1 ^ msb_op2 == 1 << 7 && msb_result == msb_op2 {
-                flags = flags | Flags::OVERFLOW_FLAG;
-            }
+        } else if msb_op1 ^ msb_op2 == 1 << 7 && msb_result == msb_op2 {
+            flags |= Flags::OVERFLOW_FLAG;
         }
     }
 
-    return flags;
+    flags
 }
 
 #[cfg(test)]
