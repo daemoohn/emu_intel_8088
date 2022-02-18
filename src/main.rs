@@ -304,6 +304,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_aas() {
+        assert_eq!(
+            (0x507, Flags::empty()),
+            aas(0x5C7, Flags::CARRY_FLAG | Flags::SIGN_FLAG)
+        );
+    }
+
+    #[test]
     fn test_daa() {
         assert_eq!(
             (
