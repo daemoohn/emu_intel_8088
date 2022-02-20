@@ -10,8 +10,10 @@ enum OperationType {
     //DAA,
     SUB,
     DEC,
-    Multiplication,
-    Division,
+    NEG,
+    CMP,
+    AAS,
+    //DAS,
 }
 
 bitflags! {
@@ -71,59 +73,35 @@ pub fn das(op1: u8, flags: Flags) -> (u8, Flags) {
 
 pub fn aas(op1: u16, flags: Flags) -> (u16, Flags) {
     // based on https://stackoverflow.com/questions/51710279/assembly-instructions-aaa
-    // note: op1 is ax
-    // IF ((( AL and 0FH ) > 9 ) or (AF==1)
-    //     IF CPU<286 THEN
-    //         AL = AL-6
-    //     ELSE
-    //         AX = AX-6
-    //     ENDIF
-    //     AH = AH-1
-    //     CF = 1
-    //     AF = 1
-    // ELSE
-    //     CF = 0
-    //     AF = 0
-    // ENDIF
-    // AL = AL and 0Fh
-    let mut r_flags = Flags::empty();
     let mut result = op1;
     if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result -= 262;
-        r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
-    } else {
-        r_flags -= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
     }
     result &= 0xFF0F;
-
+    let r_flags = compute_flags_gen(op1, op1, result, Some(flags), OperationType::AAS);
     (result, r_flags)
 }
 
 pub fn cmp16(op1: u16, op2: u16) -> Flags {
     let diff = op1 - op2;
-    compute_flags_gen(op1, op2, diff, None, OperationType::SUB)
+    compute_flags_gen(op1, op2, diff, None, OperationType::CMP)
 }
 
 pub fn cmp8(op1: u8, op2: u8) -> Flags {
     let diff = op1 - op2;
-    compute_flags_gen(op1, op2, diff, None, OperationType::SUB)
+    compute_flags_gen(op1, op2, diff, None, OperationType::CMP)
 }
 
 pub fn neg16(op1: u16) -> (u16, Flags) {
-    let (result, mut r_flags) = sub16(0, op1);
-    if op1 == 0 {
-        r_flags -= Flags::CARRY_FLAG;
-    }
-
-    (result, r_flags)
+    let result = 0 - op1;
+    let flags = compute_flags_gen(0, op1, result, None, OperationType::NEG);
+    (result, flags)
 }
 
 pub fn neg8(op1: u8) -> (u8, Flags) {
-    let (result, mut r_flags) = sub8(0, op1);
-    if op1 == 0 {
-        r_flags -= Flags::CARRY_FLAG;
-    }
-    (result, r_flags)
+    let result = 0 - op1;
+    let flags = compute_flags_gen(0, op1, result, None, OperationType::NEG);
+    (result, flags)
 }
 
 pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
@@ -354,7 +332,7 @@ fn compute_flags_gen<
                 flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
             }
         }
-        OperationType::SUB => {
+        OperationType::SUB | OperationType::CMP => {
             if op2 > op1 {
                 flags |= Flags::CARRY_FLAG;
             }
@@ -428,8 +406,51 @@ fn compute_flags_gen<
                 flags |= Flags::OVERFLOW_FLAG;
             }
         }
-        OperationType::Multiplication => {}
-        OperationType::Division => {}
+        OperationType::NEG => {
+            if op2 != T::zero() {
+                flags |= Flags::CARRY_FLAG;
+            }
+
+            let mut bits_set = 0;
+            for pos in 0..8 {
+                if result & (T::one() << T::from(pos).unwrap()) != T::zero() {
+                    bits_set += 1;
+                }
+            }
+            if bits_set & 1 == 0 {
+                flags |= Flags::PARITY_FLAG;
+            }
+
+            if op2 & T::from(0x0F).unwrap() > op1 & T::from(0x0F).unwrap() {
+                flags |= Flags::AUXILIARY_CARRY_FLAG;
+            }
+
+            if result == T::zero() {
+                flags |= Flags::ZERO_FLAG;
+            }
+
+            let msb_bit = (mem::size_of::<T>() - 1) * 8 + 7;
+            let msb_result = result & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_result == (T::one() << T::from(msb_bit).unwrap()) {
+                flags |= Flags::SIGN_FLAG;
+            }
+
+            let msb_op1 = op1 & (T::one() << T::from(msb_bit).unwrap());
+            let msb_op2 = op2 & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_op1 ^ msb_op2 == (T::one() << T::from(msb_bit).unwrap()) && msb_result == msb_op2
+            {
+                flags |= Flags::OVERFLOW_FLAG;
+            }
+        }
+        OperationType::AAS => {
+            if op1 & T::from(0x000F).unwrap() > T::from(9).unwrap()
+                || input_flags.unwrap() & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG
+            {
+                flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+            }
+        }
     }
 
     flags
