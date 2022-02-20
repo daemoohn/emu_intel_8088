@@ -15,7 +15,7 @@ enum OperationType {
     NEG,
     CMP,
     AAS,
-    //DAS,
+    DAS,
 }
 
 bitflags! {
@@ -40,37 +40,16 @@ bitflags! {
 // }
 
 pub fn das(op1: u8, flags: Flags) -> (u8, Flags) {
-    // base on https://pdos.csail.mit.edu/6.828/2018/readings/i386/DAS.htm
-    // IF (AL AND 0FH) > 9 OR AF = 1
-    // THEN
-    //    AL := AL - 6;
-    //    AF := 1;
-    // ELSE
-    //    AF := 0;
-    // FI;
-    // IF (AL > 9FH) OR (CF = 1)
-    // THEN
-    //    AL := AL - 60H;
-    //    CF := 1;
-    // ELSE CF := 0;
-    // FI;
-    //
+    // base on https://www.cs.ubbcluj.ro/~mihai-suciu/asc/html/DAS.html
     let mut result = op1;
-    let mut temp_flags = Flags::empty();
-
-    if op1 & 0x0000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
+    if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result -= 6;
-        temp_flags |= Flags::AUXILIARY_CARRY_FLAG;
     }
-    if op1 > 0x009F || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
-        result -= 0x0060;
-        temp_flags |= Flags::CARRY_FLAG;
+    if op1 > 0x0099 || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
+        result -= 0x60;
     }
-    let mut r_flags = compute_flags_gen(op1, op1, result, None, OperationType::SUB);
-    r_flags = (r_flags - Flags::AUXILIARY_CARRY_FLAG) | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
-    r_flags = (r_flags - Flags::CARRY_FLAG) | (temp_flags & Flags::CARRY_FLAG);
-
-    return (result, r_flags);
+    let flags = compute_flags_gen(op1, op1, result, Some(flags), OperationType::DAS);
+    (result, flags)
 }
 
 pub fn aas(op1: u16, flags: Flags) -> (u16, Flags) {
@@ -476,6 +455,47 @@ fn compute_flags_gen<
                 || input_flags.unwrap() & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG
             {
                 flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+            }
+        }
+        OperationType::DAS => {
+            if op1 & T::from(0x000F).unwrap() > T::from(9).unwrap()
+                || input_flags.unwrap() & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG
+            {
+                let temp_flags = compute_flags_gen(
+                    op1,
+                    T::from(6).unwrap(),
+                    op1 - T::from(6).unwrap(),
+                    None,
+                    OperationType::SUB,
+                );
+                flags |= input_flags.unwrap() & Flags::CARRY_FLAG | temp_flags & Flags::CARRY_FLAG;
+                flags |= Flags::AUXILIARY_CARRY_FLAG;
+            }
+            if op1 > T::from(0x0099).unwrap()
+                || input_flags.unwrap() & Flags::CARRY_FLAG == Flags::CARRY_FLAG
+            {
+                flags |= Flags::CARRY_FLAG;
+            }
+
+            let mut bits_set = 0;
+            for pos in 0..8 {
+                if result & (T::one() << T::from(pos).unwrap()) != T::zero() {
+                    bits_set += 1;
+                }
+            }
+            if bits_set & 1 == 0 {
+                flags |= Flags::PARITY_FLAG;
+            }
+
+            if result == T::zero() {
+                flags |= Flags::ZERO_FLAG;
+            }
+
+            let msb_bit = (mem::size_of::<T>() - 1) * 8 + 7;
+            let msb_result = result & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_result == (T::one() << T::from(msb_bit).unwrap()) {
+                flags |= Flags::SIGN_FLAG;
             }
         }
     }
