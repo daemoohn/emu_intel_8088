@@ -5,10 +5,12 @@ use num::{NumCast, Unsigned};
 
 enum OperationType {
     ADD,
+    ADC,
     INC,
     AAA,
-    //DAA,
+    DAA,
     SUB,
+    SBB,
     DEC,
     NEG,
     CMP,
@@ -118,13 +120,13 @@ pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
 
 pub fn sbb16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 - op2 - carry;
-    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SUB);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SBB);
     (result, r_flags)
 }
 
 pub fn sbb8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 - op2 - carry;
-    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SUB);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SBB);
     (result, r_flags)
 }
 
@@ -141,32 +143,16 @@ pub fn sub8(op1: u8, op2: u8) -> (u8, Flags) {
 }
 
 pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
-    // note: op1 is ax
-    // based on https://stackoverflow.com/questions/18945247/how-does-aaa-work-in-8086-instruction-set
-    // based on https://www.felixcloutier.com/x86/daa
-    // if ( (AL and 0Fh) > 9 or (AuxC = 1)) then
-    //     al := al + 6
-    //     AuxC := 1               ;Set Auxilliary carry.
-    // endif
-    // if ( (al > 9Fh) or (Carry = 1)) then
-    //     al := al + 60h
-    //     Carry := 1;             ;Set carry flag.
-    // endif
-    let mut temp_flags = Flags::empty();
+    // based on https://www.cs.ubbcluj.ro/~mihai-suciu/asc/html/DAA.html
     let mut result = op1;
     if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result += 6;
-        temp_flags |= Flags::AUXILIARY_CARRY_FLAG;
     }
-    if result > 0x009F || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
-        result += 0x0060;
-        temp_flags |= Flags::CARRY_FLAG;
+    if op1 > 0x0099 || flags & Flags::CARRY_FLAG == Flags::CARRY_FLAG {
+        result += 0x60;
     }
-    let mut r_flags = compute_flags_gen(op1, op1, result, None, OperationType::ADD);
-    r_flags = (r_flags - Flags::AUXILIARY_CARRY_FLAG) | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
-    r_flags = (r_flags - Flags::CARRY_FLAG) | (temp_flags & Flags::CARRY_FLAG);
-
-    (result, r_flags)
+    let flags = compute_flags_gen(op1, op1, result, Some(flags), OperationType::DAA);
+    (result, flags)
 }
 
 pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
@@ -195,13 +181,13 @@ pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
 
 pub fn adc16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADD);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADC);
     (result, r_flags)
 }
 
 pub fn adc8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADD);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADC);
     (result, r_flags)
 }
 
@@ -236,7 +222,7 @@ fn compute_flags_gen<
     let mut flags = Flags::empty();
 
     match op_type {
-        OperationType::ADD => {
+        OperationType::ADD | OperationType::ADC => {
             if result < op1 {
                 flags |= Flags::CARRY_FLAG;
             }
@@ -332,7 +318,48 @@ fn compute_flags_gen<
                 flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
             }
         }
-        OperationType::SUB | OperationType::CMP => {
+        OperationType::DAA => {
+            if op1 & T::from(0x000F).unwrap() > T::from(9).unwrap()
+                || input_flags.unwrap() & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG
+            {
+                let temp_flags = compute_flags_gen(
+                    op1,
+                    T::from(6).unwrap(),
+                    op1 + T::from(6).unwrap(),
+                    None,
+                    OperationType::ADD,
+                );
+                flags |= input_flags.unwrap() & Flags::CARRY_FLAG | temp_flags & Flags::CARRY_FLAG;
+                flags |= Flags::AUXILIARY_CARRY_FLAG;
+            }
+            if op1 > T::from(0x0099).unwrap()
+                || input_flags.unwrap() & Flags::CARRY_FLAG == Flags::CARRY_FLAG
+            {
+                flags |= Flags::CARRY_FLAG;
+            }
+
+            let mut bits_set = 0;
+            for pos in 0..8 {
+                if result & (T::one() << T::from(pos).unwrap()) != T::zero() {
+                    bits_set += 1;
+                }
+            }
+            if bits_set & 1 == 0 {
+                flags |= Flags::PARITY_FLAG;
+            }
+
+            if result == T::zero() {
+                flags |= Flags::ZERO_FLAG;
+            }
+
+            let msb_bit = (mem::size_of::<T>() - 1) * 8 + 7;
+            let msb_result = result & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_result == (T::one() << T::from(msb_bit).unwrap()) {
+                flags |= Flags::SIGN_FLAG;
+            }
+        }
+        OperationType::SUB | OperationType::SBB | OperationType::CMP => {
             if op2 > op1 {
                 flags |= Flags::CARRY_FLAG;
             }
@@ -487,14 +514,10 @@ mod tests {
         assert_eq!(
             (
                 0x14,
-                Flags::AUXILIARY_CARRY_FLAG
-                    | Flags::PARITY_FLAG
-                    | Flags::CARRY_FLAG
-                    | Flags::OVERFLOW_FLAG
+                Flags::AUXILIARY_CARRY_FLAG | Flags::PARITY_FLAG | Flags::CARRY_FLAG
             ),
             daa(0xAE, Flags::SIGN_FLAG)
         );
-        //assert_eq!((0x34, Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG), daa(0x2E, Flags::OVERFLOW_FLAG | Flags::SIGN_FLAG));
     }
 
     #[test]
