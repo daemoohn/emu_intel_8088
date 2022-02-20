@@ -4,8 +4,12 @@ use bitflags::bitflags;
 use num::{NumCast, Unsigned};
 
 enum OperationType {
-    Addition,
-    Subtraction,
+    ADD,
+    INC,
+    AAA,
+    //DAA,
+    SUB,
+    DEC,
     Multiplication,
     Division,
 }
@@ -58,7 +62,7 @@ pub fn das(op1: u8, flags: Flags) -> (u8, Flags) {
         result -= 0x0060;
         temp_flags |= Flags::CARRY_FLAG;
     }
-    let mut r_flags = compute_flags_gen(op1, op1, result, OperationType::Subtraction);
+    let mut r_flags = compute_flags_gen(op1, op1, result, None, OperationType::SUB);
     r_flags = (r_flags - Flags::AUXILIARY_CARRY_FLAG) | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
     r_flags = (r_flags - Flags::CARRY_FLAG) | (temp_flags & Flags::CARRY_FLAG);
 
@@ -97,12 +101,12 @@ pub fn aas(op1: u16, flags: Flags) -> (u16, Flags) {
 
 pub fn cmp16(op1: u16, op2: u16) -> Flags {
     let diff = op1 - op2;
-    compute_flags_gen(op1, op2, diff, OperationType::Subtraction)
+    compute_flags_gen(op1, op2, diff, None, OperationType::SUB)
 }
 
 pub fn cmp8(op1: u8, op2: u8) -> Flags {
     let diff = op1 - op2;
-    compute_flags_gen(op1, op2, diff, OperationType::Subtraction)
+    compute_flags_gen(op1, op2, diff, None, OperationType::SUB)
 }
 
 pub fn neg16(op1: u16) -> (u16, Flags) {
@@ -123,40 +127,38 @@ pub fn neg8(op1: u8) -> (u8, Flags) {
 }
 
 pub fn dec16(op1: u16, flags: Flags) -> (u16, Flags) {
-    let (result, mut r_flags) = sub16(op1, 1);
-    // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
+    let result = op1 - 1;
+    let r_flags = compute_flags_gen(op1, 1, result, Some(flags), OperationType::DEC);
     (result, r_flags)
 }
 
 pub fn dec8(op1: u8, flags: Flags) -> (u8, Flags) {
-    let (result, mut r_flags) = sub8(op1, 1);
-    // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
+    let result = op1 - 1;
+    let r_flags = compute_flags_gen(op1, 1, result, Some(flags), OperationType::DEC);
     (result, r_flags)
 }
 
 pub fn sbb16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 - op2 - carry;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Subtraction);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SUB);
     (result, r_flags)
 }
 
 pub fn sbb8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 - op2 - carry;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Subtraction);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SUB);
     (result, r_flags)
 }
 
 pub fn sub16(op1: u16, op2: u16) -> (u16, Flags) {
     let result = op1 - op2;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Subtraction);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SUB);
     (result, r_flags)
 }
 
 pub fn sub8(op1: u8, op2: u8) -> (u8, Flags) {
     let result = op1 - op2;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Subtraction);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::SUB);
     (result, r_flags)
 }
 
@@ -182,7 +184,7 @@ pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
         result += 0x0060;
         temp_flags |= Flags::CARRY_FLAG;
     }
-    let mut r_flags = compute_flags_gen(op1, op1, result, OperationType::Addition);
+    let mut r_flags = compute_flags_gen(op1, op1, result, None, OperationType::ADD);
     r_flags = (r_flags - Flags::AUXILIARY_CARRY_FLAG) | (temp_flags & Flags::AUXILIARY_CARRY_FLAG);
     r_flags = (r_flags - Flags::CARRY_FLAG) | (temp_flags & Flags::CARRY_FLAG);
 
@@ -192,72 +194,48 @@ pub fn daa(op1: u8, flags: Flags) -> (u8, Flags) {
 pub fn aaa(op1: u16, flags: Flags) -> (u16, Flags) {
     // based on https://asm.inightmare.org/opcodelst/index.php?op=AAA
     // https://stackoverflow.com/questions/51710279/assembly-instructions-aaa
-    // note: op1 is ax
-    // IF ((( AL and 0FH ) > 9 ) or (AF==1)
-    //     IF CPU<286 THEN
-    //         AL = AL+6
-    //     ELSE
-    //         AX = AX+6
-    //     ENDIF
-    //     AH = AH+1
-    //     CF = 1
-    //     AF = 1
-    // ELSE
-    //     CF = 0
-    //     AF = 0
-    // ENDIF
-    // AL = AL and 0Fh
-    let mut r_flags = Flags::empty();
     let mut result = op1;
     if op1 & 0x000F > 9 || flags & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG {
         result += 262;
-        r_flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
-    } else {
-        r_flags -= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
     }
     result &= 0xFF0F;
-
+    let r_flags = compute_flags_gen(op1, op1, result, Some(flags), OperationType::AAA);
     (result, r_flags)
 }
 
 pub fn inc16(op1: u16, flags: Flags) -> (u16, Flags) {
-    let (result, mut r_flags) = add16(op1, 1);
-    // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
+    let result = op1 + 1;
+    let r_flags = compute_flags_gen(op1, 1, result, Some(flags), OperationType::INC);
     (result, r_flags)
 }
 
 pub fn inc8(op1: u8, flags: Flags) -> (u8, Flags) {
-    let (result, mut r_flags) = add8(op1, 1);
-    // we remove carry flag from result flags and add it only if the initial flags contained it
-    r_flags -= Flags::CARRY_FLAG | (flags & Flags::CARRY_FLAG);
+    let result = op1 + 1;
+    let r_flags = compute_flags_gen(op1, 1, result, Some(flags), OperationType::INC);
     (result, r_flags)
 }
 
 pub fn adc16(op1: u16, op2: u16, carry: u16) -> (u16, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Addition);
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADD);
     (result, r_flags)
 }
 
 pub fn adc8(op1: u8, op2: u8, carry: u8) -> (u8, Flags) {
     let result = op1 + op2 + carry;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Addition);
-
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADD);
     (result, r_flags)
 }
 
 pub fn add16(op1: u16, op2: u16) -> (u16, Flags) {
     let result = op1 + op2;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Addition);
-
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADD);
     (result, r_flags)
 }
 
 pub fn add8(op1: u8, op2: u8) -> (u8, Flags) {
     let result = op1 + op2;
-    let r_flags = compute_flags_gen(op1, op2, result, OperationType::Addition);
-
+    let r_flags = compute_flags_gen(op1, op2, result, None, OperationType::ADD);
     (result, r_flags)
 }
 
@@ -274,12 +252,13 @@ fn compute_flags_gen<
     op1: T,
     op2: T,
     result: T,
+    input_flags: Option<Flags>,
     op_type: OperationType,
 ) -> Flags {
     let mut flags = Flags::empty();
 
     match op_type {
-        OperationType::Addition => {
+        OperationType::ADD => {
             if result < op1 {
                 flags |= Flags::CARRY_FLAG;
             }
@@ -325,10 +304,96 @@ fn compute_flags_gen<
                 flags |= Flags::OVERFLOW_FLAG;
             }
         }
-        OperationType::Subtraction => {
+        OperationType::INC => {
+            flags |= input_flags.unwrap() & Flags::CARRY_FLAG;
+            let mut bits_set = 0;
+            for pos in 0..8 {
+                if result & (T::one() << T::from(pos).unwrap()) != T::zero() {
+                    bits_set += 1;
+                }
+            }
+            if bits_set & 1 == 0 {
+                flags |= Flags::PARITY_FLAG;
+            }
+
+            let bit_result = result & (T::one() << T::from(3).unwrap());
+            let bit_op1 = op1 & (T::one() << T::from(3).unwrap());
+            let bit_op2 = op2 & (T::one() << T::from(3).unwrap());
+
+            if (bit_result & bit_op1 & bit_op2 == T::one() << T::from(3).unwrap())
+                || (bit_result == T::zero() && bit_op1 | bit_op2 == T::one() << T::from(3).unwrap())
+            {
+                flags |= Flags::AUXILIARY_CARRY_FLAG;
+            }
+
+            if result == T::zero() {
+                flags |= Flags::ZERO_FLAG;
+            }
+
+            let msb_bit = (mem::size_of::<T>() - 1) * 8 + 7;
+            let msb_result = result & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_result == (T::one() << T::from(msb_bit).unwrap()) {
+                flags |= Flags::SIGN_FLAG;
+            }
+
+            let msb_op1 = op1 & (T::one() << T::from(msb_bit).unwrap());
+            let msb_op2 = op2 & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_op1 == msb_op2
+                && (msb_op1 ^ msb_result == (T::one() << T::from(msb_bit).unwrap())
+                    && msb_op2 ^ msb_result == (T::one() << T::from(msb_bit).unwrap()))
+            {
+                flags |= Flags::OVERFLOW_FLAG;
+            }
+        }
+        OperationType::AAA => {
+            if op1 & T::from(0x000F).unwrap() > T::from(9).unwrap()
+                || input_flags.unwrap() & Flags::AUXILIARY_CARRY_FLAG == Flags::AUXILIARY_CARRY_FLAG
+            {
+                flags |= Flags::AUXILIARY_CARRY_FLAG | Flags::CARRY_FLAG;
+            }
+        }
+        OperationType::SUB => {
             if op2 > op1 {
                 flags |= Flags::CARRY_FLAG;
             }
+
+            let mut bits_set = 0;
+            for pos in 0..8 {
+                if result & (T::one() << T::from(pos).unwrap()) != T::zero() {
+                    bits_set += 1;
+                }
+            }
+            if bits_set & 1 == 0 {
+                flags |= Flags::PARITY_FLAG;
+            }
+
+            if op2 & T::from(0x0F).unwrap() > op1 & T::from(0x0F).unwrap() {
+                flags |= Flags::AUXILIARY_CARRY_FLAG;
+            }
+
+            if result == T::zero() {
+                flags |= Flags::ZERO_FLAG;
+            }
+
+            let msb_bit = (mem::size_of::<T>() - 1) * 8 + 7;
+            let msb_result = result & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_result == (T::one() << T::from(msb_bit).unwrap()) {
+                flags |= Flags::SIGN_FLAG;
+            }
+
+            let msb_op1 = op1 & (T::one() << T::from(msb_bit).unwrap());
+            let msb_op2 = op2 & (T::one() << T::from(msb_bit).unwrap());
+
+            if msb_op1 ^ msb_op2 == (T::one() << T::from(msb_bit).unwrap()) && msb_result == msb_op2
+            {
+                flags |= Flags::OVERFLOW_FLAG;
+            }
+        }
+        OperationType::DEC => {
+            flags |= input_flags.unwrap() & Flags::CARRY_FLAG;
 
             let mut bits_set = 0;
             for pos in 0..8 {
@@ -369,90 +434,6 @@ fn compute_flags_gen<
 
     flags
 }
-
-// fn compute_flags(op1: u16, op2: u16, is_add: bool, is_word: bool, result: u16) -> Flags {
-//     let mut flags = Flags::empty();
-
-//     if is_add {
-//         if result < op1 {
-//             flags |= Flags::CARRY_FLAG;
-//         }
-//     } else if op2 > op1 {
-//         flags |= Flags::CARRY_FLAG;
-//     }
-
-//     let mut bits_set = 0;
-
-//     for pos in 0..8 {
-//         if result & (1 << pos) != 0 {
-//             bits_set += 1;
-//         }
-//     }
-//     if bits_set & 1 == 0 {
-//         flags |= Flags::PARITY_FLAG;
-//     }
-
-//     if is_add {
-//         let bit_result = result & (1 << 3);
-//         let bit_op1 = op1 & (1 << 3);
-//         let bit_op2 = op2 & (1 << 3);
-
-//         if (bit_result & bit_op1 & bit_op2 == 1 << 3)
-//             || (bit_result == 0 && bit_op1 | bit_op2 == 1 << 3)
-//         {
-//             flags |= Flags::AUXILIARY_CARRY_FLAG;
-//         }
-//     } else if op2 & 0x0F > op1 & 0x0F {
-//         flags |= Flags::AUXILIARY_CARRY_FLAG;
-//     }
-
-//     if result == 0 {
-//         flags |= Flags::ZERO_FLAG;
-//     }
-
-//     let msb_result;
-//     if is_word {
-//         msb_result = result & (1 << 15);
-
-//         if msb_result == (1 << 15) {
-//             flags |= Flags::SIGN_FLAG;
-//         }
-
-//         let msb_op1 = op1 & (1 << 15);
-//         let msb_op2 = op2 & (1 << 15);
-
-//         if is_add {
-//             if msb_op1 == msb_op2
-//                 && (msb_op1 ^ msb_result == (1 << 15) && msb_op2 ^ msb_result == (1 << 15))
-//             {
-//                 flags |= Flags::OVERFLOW_FLAG;
-//             }
-//         } else if msb_op1 ^ msb_op2 == 1 << 15 && msb_result == msb_op2 {
-//             flags |= Flags::OVERFLOW_FLAG;
-//         }
-//     } else {
-//         msb_result = result & (1 << 7);
-
-//         if msb_result == (1 << 7) {
-//             flags |= Flags::SIGN_FLAG;
-//         }
-
-//         let msb_op1 = op1 & (1 << 7);
-//         let msb_op2 = op2 & (1 << 7);
-
-//         if is_add {
-//             if msb_op1 == msb_op2
-//                 && (msb_op1 ^ msb_result == (1 << 7) && msb_op2 ^ msb_result == (1 << 7))
-//             {
-//                 flags |= Flags::OVERFLOW_FLAG;
-//             }
-//         } else if msb_op1 ^ msb_op2 == 1 << 7 && msb_result == msb_op2 {
-//             flags |= Flags::OVERFLOW_FLAG;
-//         }
-//     }
-
-//     flags
-// }
 
 #[cfg(test)]
 mod tests {
